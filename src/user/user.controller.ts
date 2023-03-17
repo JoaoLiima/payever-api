@@ -1,4 +1,3 @@
-import { ValidationPipe } from '@/common/pipes/validation.pipe';
 import {
   Controller,
   Post,
@@ -16,7 +15,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  createUser(@Body(new ValidationPipe()) createUser: CreateUserDTO) {
+  createUser(@Body() createUser: CreateUserDTO) {
     return this.userService.create(createUser);
   }
 

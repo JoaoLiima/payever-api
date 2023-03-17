@@ -1,18 +1,19 @@
 import { BadRequestError, NotFoundError } from '@/error';
 import { saveAvatar } from '@/helpers/saveAvatar';
 import { HttpService } from '@nestjs/axios';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CreateUserDTO } from './dto/create-user.dto';
-import { UserDocument, User, Avatar, AvatarDocument } from './schemas';
+import { UserDocument, User } from './schemas';
 import * as fs from 'fs';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Avatar.name) private avatarModel: Model<AvatarDocument>,
+    @Inject('RABBITMQ_SERVICE') private rabbitmqService: ClientProxy,
     private readonly httpService: HttpService,
   ) {}
 
@@ -30,6 +31,13 @@ export class UserService {
       last_name: createUser.last_name,
       email: createUser.email,
     });
+
+    this.rabbitmqService.send(
+      {
+        cmd: `created-user-${newUser.id}`,
+      },
+      newUser,
+    );
 
     return newUser.save();
   }
@@ -59,6 +67,11 @@ export class UserService {
     if (!user) {
       const newUser = await this.findById(id);
       user = await new this.userModel(newUser).save();
+    }
+
+    if (user && !user.avatar) {
+      const externalUser = await this.findById(id);
+      user.avatar = externalUser.avatar;
     }
 
     if (!fs.existsSync(`${user.avatar}`)) {
